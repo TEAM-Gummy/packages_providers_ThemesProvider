@@ -39,7 +39,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import static android.content.res.CustomTheme.HOLO_DEFAULT;
+import static android.content.res.ThemeConfig.HOLO_DEFAULT;
 
 /**
  * Helper class to populate the provider with info from the theme.
@@ -156,6 +156,9 @@ public class ThemePackageHelper {
             } else if (pi.isLegacyIconPackApk) {
                 updateLegacyIconPackInternal(context, pi, capabilities);
             }
+
+            // We should reapply any components that are currently applied for this theme.
+            reapplyInstalledComponentsForTheme(context, pkgName);
         }
     }
 
@@ -222,9 +225,6 @@ public class ThemePackageHelper {
         values.put(ThemesColumns.TITLE, labelName.toString());
         values.put(ThemesColumns.DATE_CREATED, System.currentTimeMillis());
         values.put(ThemesColumns.LAST_UPDATE_TIME, pi.lastUpdateTime);
-
-        // Insert theme capabilities
-        insertCapabilities(capabilities, values);
 
         String where = ThemesColumns.PKG_NAME + "=?";
         String[] args = { pi.packageName };
@@ -347,5 +347,24 @@ public class ThemePackageHelper {
             count += isImplemented ? 1 : 0;
         }
         return count >= 2;
+    }
+
+    private static void reapplyInstalledComponentsForTheme(Context context, String pkgName) {
+        List<String> reApply = new LinkedList<String>(); // components to re-apply
+        Cursor mixnmatch = context.getContentResolver().query(MixnMatchColumns.CONTENT_URI,
+                null, null, null, null);
+        while (mixnmatch.moveToNext()) {
+            String mixnmatchKey = mixnmatch.getString(mixnmatch
+                    .getColumnIndex(MixnMatchColumns.COL_KEY));
+            String component = ThemesContract.MixnMatchColumns
+                    .mixNMatchKeyToComponent(mixnmatchKey);
+            String pkg = mixnmatch.getString(
+                    mixnmatch.getColumnIndex(MixnMatchColumns.COL_VALUE));
+            if (pkgName.equals(pkg)) {
+                reApply.add(component);
+            }
+        }
+        ThemeManager manager = (ThemeManager) context.getSystemService(Context.THEME_SERVICE);
+        manager.requestThemeChange(pkgName, reApply);
     }
 }
